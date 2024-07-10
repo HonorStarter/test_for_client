@@ -11,17 +11,18 @@ use tracing::{info, warn};
 
 #[derive(Debug)]
 struct HttpServeState {
-    path: PathBuf,
+    path: PathBuf, //具体的path后面的地址
 }
 
 pub async fn process_http_serve(path: PathBuf, port: u16) -> Result<()> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("Serving {:?} on {}", path, addr);
+    let addr: SocketAddr = SocketAddr::from(([0, 0, 0, 0], port));
+    info!("zonghy serving {:?} on {}", path, addr);
 
-    let state = HttpServeState { path: path.clone() };
+    let state: HttpServeState = HttpServeState { path: path.clone() };
     // axum router
     let router = Router::new()
         .nest_service("/tower", ServeDir::new(path))
+        // .route("/*path", get(file_handler))
         .route("/*path", get(file_handler))
         .with_state(Arc::new(state));
 
@@ -30,6 +31,12 @@ pub async fn process_http_serve(path: PathBuf, port: u16) -> Result<()> {
     Ok(())
 }
 
+// 补充默认标题
+// async fn index_handler() -> &'static str{
+//     "Hello zonghy!"
+// }
+
+// handler一定是要async
 async fn file_handler(
     State(state): State<Arc<HttpServeState>>,
     Path(path): Path<String>,
@@ -39,13 +46,10 @@ async fn file_handler(
     if !p.exists() {
         (
             StatusCode::NOT_FOUND,
-            format!("File {} note found", p.display()),
+            format!("File {} not found", p.display()),
         )
     } else {
-        // TODO: test p is a directory
-        // if it is a directory, list all files/subdirectories
-        // as <li><a href="/path/to/file">file name</a></li>
-        // <html><body><ul>...</ul></body></html>
+        //采用异步读写，读取二进制文件报string会报error
         match tokio::fs::read_to_string(p).await {
             Ok(content) => {
                 info!("Read {} bytes", content.len());
